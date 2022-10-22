@@ -1,8 +1,7 @@
-use std::sync::Arc;
-
-use crate::model::EntryConsumer;
+use crate::errors::DBResult;
 use crate::model::OpType;
 use crate::model::OwnedEntry;
+use crate::model::RefEntry;
 
 pub struct WriteBatch {
     rep: Vec<OwnedEntry>,
@@ -31,9 +30,17 @@ impl WriteBatch {
         })
     }
 
-    pub(crate) fn consume_by(&self, consumer: Arc<dyn EntryConsumer>) {
+    pub(crate) fn consume_by<F, OUTPUT>(&self, f: F) -> DBResult<Vec<OUTPUT>>
+    where
+        F: Fn(&OwnedEntry) -> DBResult<OUTPUT>,
+    {
+        let mut vec = Vec::new();
         for x in &self.rep {
-            consumer.consume(x.as_ref_entry());
+            match f(x) {
+                Ok(o) => vec.push(o),
+                Err(e) => return Err(e),
+            }
         }
+        Ok(vec)
     }
 }

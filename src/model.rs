@@ -120,5 +120,5 @@ impl<'a, 'b> RefEntry<'a, 'b> {
 }
 
 pub(crate) trait EntryConsumer {
-    fn consume(&self, entry: RefEntry);
+    fn consume(&mut self, entry: OwnedEntry);
 }

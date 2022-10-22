@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use crate::dbfile::{EntryBlock, EntryHandle, FileId, LogFile, INVALID_FILE_ID};
+use crate::dbfile::{EntryBlock, EntryHandle, FileId, KeyAndEntryHandle, LogFile, INVALID_FILE_ID};
 use crate::errors::{DBError, DBResult};
 use crate::model::OpType;
 use crate::options::{Options, ReadOptions, WriteOptions};
@@ -15,8 +16,8 @@ pub struct BitcaskDB {
 }
 
 struct BitcaskCore {
-    mut_log: Option<Arc<LogFile>>,
-    imm_logs: HashMap<FileId, Arc<LogFile>>,
+    mut_log: Option<Rc<LogFile>>,
+    imm_logs: HashMap<FileId, Rc<LogFile>>,
     mem_index: BTreeMap<Vec<u8>, EntryHandle>,
     row_cache: HashMap<EntryHandle, EntryBlock>,
     bg_error: Option<DBError>,
@@ -44,14 +45,45 @@ impl BitcaskDB {
     }
 
     pub fn put(&self, options: WriteOptions, key: &[u8], value: &[u8]) -> DBResult<()> {
-        Ok(())
+        let mut batch = WriteBatch::new();
+        batch.put(key, value);
+        self.write(options, &batch)
     }
 
     pub fn delete(&self, options: WriteOptions, key: &[u8]) -> DBResult<()> {
-        Ok(())
+        let mut batch = WriteBatch::new();
+        batch.delete(key);
+        self.write(options, &batch)
     }
 
     pub fn write(&self, options: WriteOptions, batch: &WriteBatch) -> DBResult<()> {
+        let mut core = self.core.lock().unwrap();
+        let mut_log = match core.mut_log.clone() {
+            None => {
+                // create a imm file
+                todo!();
+            }
+            Some(x) if x.get_offset() < self.options.target_file_size => x.clone(),
+            Some(x) => {
+                // switch a new mut log file
+                todo!();
+            }
+        };
+        let handles = batch.consume_by(|x| {
+            mut_log.write_entry(x.clone()).map(|h| KeyAndEntryHandle {
+                key: x.key.clone(),
+                handle: h,
+            })
+        })?;
+        
+        if options.sync {
+            mut_log.sync()?;
+            // TODO record bg error ?
+        }
+
+        for h in handles {
+            core.mem_index.insert(h.key, h.handle);
+        }
         Ok(())
     }
 
@@ -88,3 +120,12 @@ impl BitcaskDB {
         todo!()
     }
 }
+
+// impl EntryConsumer for BTreeMap<Vec<u8>, EntryHandle> {
+//     fn consume(&mut self, entry: OwnedEntry) {
+//         match entry.op_type {
+//             OpType::Put => self.insert(entry.key, entry.value.unwrap()),
+//             OpType::Del => self.remove(entry.key.as_ref()),
+//         };
+//     }
+// }
