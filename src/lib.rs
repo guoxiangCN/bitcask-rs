@@ -8,14 +8,12 @@ mod options;
 mod writebatch;
 
 pub use db::BitcaskDB;
-pub use writebatch::WriteBatch;
 pub use options::{Options, ReadOptions, WriteOptions};
+pub use writebatch::WriteBatch;
 
 #[cfg(test)]
 mod tests {
 
     #[test]
-    fn it_works() {
-       
-    }
+    fn it_works() {}
 }

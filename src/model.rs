@@ -118,3 +118,7 @@ impl<'a, 'b> RefEntry<'a, 'b> {
         data
     }
 }
+
+pub(crate) trait EntryConsumer {
+    fn consume(&self, entry: RefEntry);
+}

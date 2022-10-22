@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use crate::model::EntryConsumer;
 use crate::model::OpType;
 use crate::model::OwnedEntry;
 
@@ -26,5 +29,11 @@ impl WriteBatch {
             value: None,
             ts: Some(0),
         })
+    }
+
+    pub(crate) fn consume_by(&self, consumer: Arc<dyn EntryConsumer>) {
+        for x in &self.rep {
+            consumer.consume(x.as_ref_entry());
+        }
     }
 }
