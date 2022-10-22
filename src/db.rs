@@ -7,6 +7,7 @@ use crate::dbfile::{EntryBlock, EntryHandle, FileId, KeyAndEntryHandle, LogFile,
 use crate::errors::{DBError, DBResult};
 use crate::model::OpType;
 use crate::options::{Options, ReadOptions, WriteOptions};
+use crate::versionset::VersionSet;
 use crate::writebatch::WriteBatch;
 
 pub struct BitcaskDB {
@@ -20,28 +21,32 @@ struct BitcaskCore {
     imm_logs: HashMap<FileId, Rc<LogFile>>,
     mem_index: BTreeMap<Vec<u8>, EntryHandle>,
     row_cache: HashMap<EntryHandle, EntryBlock>,
+
     bg_error: Option<DBError>,
+    version_set: VersionSet,
 }
 
 impl BitcaskCore {
-    fn new() -> Self {
+    fn new(dbpath: PathBuf) -> Self {
         Self {
             mut_log: None,
             imm_logs: HashMap::new(),
             mem_index: BTreeMap::new(),
             row_cache: HashMap::new(),
             bg_error: None,
+            version_set: VersionSet::new(dbpath),
         }
     }
 }
 
 impl BitcaskDB {
     pub fn open<P: AsRef<Path>>(path: P, options: Options) -> DBResult<BitcaskDB> {
-        Ok(BitcaskDB {
+        let db = BitcaskDB {
             options: Arc::new(options.clone()),
             path: path.as_ref().to_path_buf(),
-            core: Arc::new(Mutex::new(BitcaskCore::new())),
-        })
+            core: Arc::new(Mutex::new(BitcaskCore::new(path.as_ref().to_path_buf()))),
+        };
+        Ok(db)
     }
 
     pub fn put(&self, options: WriteOptions, key: &[u8], value: &[u8]) -> DBResult<()> {

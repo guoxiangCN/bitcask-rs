@@ -6,6 +6,7 @@ mod errors;
 mod filename;
 mod model;
 mod options;
+mod versionset;
 mod writebatch;
 
 pub use db::BitcaskDB;
@@ -20,7 +21,7 @@ mod tests {
     fn it_works() {
         let opts = Options::default();
         let bitcask = BitcaskDB::open("/tmp/bitcask001", opts).unwrap();
-        let value = bitcask.get(ReadOptions::default(),b"__name__");
+        let value = bitcask.get(ReadOptions::default(), b"__name__");
         assert!(value.is_ok());
         assert!(value.unwrap().is_none());
     }
