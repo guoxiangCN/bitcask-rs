@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use crate::dbfile::{EntryBlock, EntryHandle, FileId, LogFile};
+use crate::dbfile::{EntryBlock, EntryHandle, FileId, LogFile, INVALID_FILE_ID};
 use crate::errors::{DBError, DBResult};
 use crate::model::OpType;
 use crate::options::{Options, ReadOptions, WriteOptions};
@@ -61,8 +61,22 @@ impl BitcaskDB {
             None => return Ok(None),
             Some(handle) => handle,
         };
-        let target_file: Option<Arc<LogFile>> = { core.mut_log.clone() };
-        let file = target_file.expect("the index of key points to a non-exist place");
+
+        assert!(handle.file_id != INVALID_FILE_ID);
+        let search_target_fn = || match core
+            .mut_log
+            .clone()
+            .filter(|x| x.get_file_id() == handle.file_id)
+        {
+            Some(x) => return Some(x),
+            None => {
+                return match core.imm_logs.get(&handle.file_id) {
+                    Some(x) => Some(x.clone()),
+                    None => None,
+                }
+            }
+        };
+        let file = search_target_fn().expect("the index of key points to a non-exist place");
         let entry = file.read_entry(handle.clone(), options.verify_checksum)?;
         match entry.op_type {
             OpType::Put => return Ok(entry.value),
