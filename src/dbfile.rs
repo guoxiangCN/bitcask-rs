@@ -4,12 +4,17 @@ use std::{fs::File, io::ErrorKind, os::unix::prelude::FileExt};
 use crate::model::{OwnedEntry, RefEntry};
 
 pub(crate) type FileId = u64;
+pub(crate) const INVALID_FILE_ID: FileId = 0;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct EntryHandle {
     pub(crate) file_id: FileId,
     pub(crate) offset: u64,
     pub(crate) length: u64,
+}
+
+pub(crate) struct EntryBlock {
+    data: Vec<u8>,
 }
 
 pub(crate) struct LogFile {
@@ -29,6 +34,10 @@ impl LogFile {
 
     pub fn get_offset(&self) -> u64 {
         self.offset
+    }
+
+    pub fn get_file_id(&self)->FileId{
+        self.id
     }
 
     pub fn sync(&self) -> std::io::Result<()> {
@@ -62,7 +71,7 @@ impl LogFile {
         })
     }
 
-    pub fn read_entry(&self, handle: EntryHandle) -> DBResult<OwnedEntry> {
+    pub fn read_entry(&self, handle: EntryHandle, verify_checksum:bool) -> DBResult<OwnedEntry> {
         assert!(self.id == handle.file_id);
         let mut buf = vec![0_u8; handle.length as usize];
         let nread = match self.file.read_at(buf.as_mut(), handle.offset) {
@@ -73,7 +82,7 @@ impl LogFile {
         if nread as u64 != handle.length {
             todo!("");
         }
-        OwnedEntry::decode_from_bytes(&buf, false)
+        OwnedEntry::decode_from_bytes(&buf, verify_checksum)
     }
 }
 
@@ -107,7 +116,7 @@ mod tests {
         assert!(handle.length == data.len() as u64);
         println!("{:?}", handle);
 
-        let read_entry = dbf.read_entry(handle.clone()).unwrap();
+        let read_entry = dbf.read_entry(handle.clone(),false).unwrap();
         assert_eq!(read_entry, oe);
         println!("{:?}", read_entry);
 
@@ -126,7 +135,7 @@ mod tests {
         assert!(handle.length == data.len() as u64);
         assert!(handle.offset == last_offset);
         println!("{:?}", handle);
-        let read_entry = dbf.read_entry(handle.clone()).unwrap();
+        let read_entry = dbf.read_entry(handle.clone(),false).unwrap();
         assert_eq!(read_entry, oe);
         println!("{:?}", read_entry);
     }
