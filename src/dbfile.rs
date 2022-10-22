@@ -3,7 +3,7 @@ use std::{fs::File, io::ErrorKind, os::unix::prelude::FileExt};
 
 use crate::model::{OwnedEntry, RefEntry};
 
-type FileId = u64;
+pub(crate) type FileId = u64;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct EntryHandle {
