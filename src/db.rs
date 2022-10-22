@@ -70,12 +70,12 @@ impl BitcaskDB {
             }
         };
         let handles = batch.consume_by(|x| {
-            mut_log.write_entry(x.clone()).map(|h| KeyAndEntryHandle {
+            mut_log.write_entry(x).map(|h| KeyAndEntryHandle {
                 key: x.key.clone(),
                 handle: h,
             })
         })?;
-        
+
         if options.sync {
             mut_log.sync()?;
             // TODO record bg error ?
