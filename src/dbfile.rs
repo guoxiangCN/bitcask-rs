@@ -1,7 +1,7 @@
 use crate::errors::{self, from_io_error, DBResult};
 use std::{cell::Cell, fs::File, io::ErrorKind, os::unix::prelude::FileExt};
 
-use crate::model::{OwnedEntry, RefEntry};
+use crate::model::OwnedEntry;
 
 pub(crate) type FileId = u64;
 pub(crate) const INVALID_FILE_ID: FileId = 0;

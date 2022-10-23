@@ -66,11 +66,16 @@ impl BitcaskCore {
         // change the memory state which is a not-fail operation.
         let old_active_file = self.active_file.replace(active_file.clone());
         if old_active_file.is_some() {
+            assert!(edit.need_freeze.is_some());
             let old_active_file = old_active_file.unwrap();
             self.freeze_files
                 .insert(old_active_file.get_file_id(), old_active_file);
         }
         Ok(active_file.clone())
+    }
+
+    fn recovery(&mut self) -> DBResult<()> {
+        todo!()
     }
 
     fn remove_obsolete_files(&self) {
@@ -80,11 +85,13 @@ impl BitcaskCore {
 
 impl BitcaskDB {
     pub fn open<P: AsRef<Path>>(path: P, options: Options) -> DBResult<BitcaskDB> {
-        let db = BitcaskDB {
+        let dbcore = Arc::new(Mutex::new(BitcaskCore::new(path.as_ref().to_path_buf())));
+        let mut core = dbcore.lock().unwrap();
+        core.recovery()?;
+        Ok(BitcaskDB {
             options: Arc::new(options.clone()),
-            core: Arc::new(Mutex::new(BitcaskCore::new(path.as_ref().to_path_buf()))),
-        };
-        Ok(db)
+            core: dbcore.clone(),
+        })
     }
 
     pub fn put(&self, options: WriteOptions, key: &[u8], value: &[u8]) -> DBResult<()> {

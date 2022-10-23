@@ -26,6 +26,8 @@ mod tests {
         assert!(value.unwrap().is_none());
 
         // test put
-        bitcask.put(WriteOptions::default(), b"name", b"guoxiang").unwrap();
+        bitcask
+            .put(WriteOptions::default(), b"name", b"guoxiang")
+            .unwrap();
     }
 }
