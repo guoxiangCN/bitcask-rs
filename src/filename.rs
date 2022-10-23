@@ -1,10 +1,9 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::dbfile::FileId;
 
 pub(crate) enum FileType {
-    MutLog, // active file for write
-    ImmLog, // immutable file for read only
+    Log, // active file for write
 
     Hint,     // persisit index for speeding recover
     Manifest, // the manifest to manage the whole db and compaction
@@ -15,8 +14,7 @@ pub(crate) enum FileType {
 impl FileType {
     pub(crate) fn get_filename(&self, file_id: FileId) -> PathBuf {
         match self {
-            FileType::MutLog => format!("{:09}.mut", file_id).into(),
-            FileType::ImmLog => format!("{:09}.imm", file_id).into(),
+            FileType::Log => format!("{:09}.dat", file_id).into(),
             FileType::Hint => format!("{:09}.hit", file_id).into(),
             FileType::Manifest => format!("MANIFEST-{:09}", file_id).into(),
             FileType::Lock => "LOCK".to_owned().into(),
@@ -46,12 +44,8 @@ mod tests {
             FileType::Manifest.get_filename(1).to_str().unwrap()
         );
         assert_eq!(
-            "000000002.imm",
-            FileType::ImmLog.get_filename(2).to_str().unwrap()
-        );
-        assert_eq!(
-            "000000002.mut",
-            FileType::MutLog.get_filename(2).to_str().unwrap()
+            "000000002.dat",
+            FileType::Log.get_filename(2).to_str().unwrap()
         );
         assert_eq!(
             "000000003.hit",

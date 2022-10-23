@@ -56,7 +56,7 @@ impl VersionSet {
     // current version.  Will release *mu while actually writing to the file.
     // REQUIRES: *mu is held on entry.
     // REQUIRES: no other thread concurrently calls LogAndApply()
-    pub fn log_and_apply(&self, edit: &VersionEdit) -> DBResult<()> {
+    pub fn log_and_apply(&self, _edit: &VersionEdit) -> DBResult<()> {
         Ok(())
     }
 

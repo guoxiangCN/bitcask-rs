@@ -15,7 +15,7 @@ pub use writebatch::WriteBatch;
 
 #[cfg(test)]
 mod tests {
-    use crate::{BitcaskDB, Options, ReadOptions};
+    use crate::{BitcaskDB, Options, ReadOptions, WriteOptions};
 
     #[test]
     fn it_works() {
@@ -24,5 +24,8 @@ mod tests {
         let value = bitcask.get(ReadOptions::default(), b"__name__");
         assert!(value.is_ok());
         assert!(value.unwrap().is_none());
+
+        // test put
+        bitcask.put(WriteOptions::default(), b"name", b"guoxiang").unwrap();
     }
 }

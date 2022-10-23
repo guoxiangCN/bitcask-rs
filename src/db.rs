@@ -4,15 +4,15 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use crate::dbfile::{EntryBlock, EntryHandle, FileId, KeyAndEntryHandle, LogFile, INVALID_FILE_ID};
-use crate::errors::{DBError, DBResult};
+use crate::errors::{from_io_error, DBError, DBResult};
+use crate::filename::FileType;
 use crate::model::OpType;
 use crate::options::{Options, ReadOptions, WriteOptions};
-use crate::versionset::VersionSet;
+use crate::versionset::{VersionEdit, VersionSet};
 use crate::writebatch::WriteBatch;
 
 pub struct BitcaskDB {
     options: Arc<Options>,
-    path: PathBuf,
     core: Arc<Mutex<BitcaskCore>>,
 }
 
@@ -24,6 +24,7 @@ struct BitcaskCore {
 
     bg_error: Option<DBError>,
     version_set: VersionSet,
+    path: PathBuf,
 }
 
 impl BitcaskCore {
@@ -34,8 +35,32 @@ impl BitcaskCore {
             mem_index: BTreeMap::new(),
             row_cache: HashMap::new(),
             bg_error: None,
-            version_set: VersionSet::new(dbpath),
+            version_set: VersionSet::new(dbpath.clone()),
+            path: dbpath.clone(),
         }
+    }
+
+    fn prepare_new_mutlog(&mut self) -> DBResult<Rc<LogFile>> {
+        let new_log_id = self.version_set.new_logfile_id();
+        let new_log_path = FileType::Log.get_full_filepath(self.path.clone(), new_log_id);
+        let file = std::fs::File::options()
+            .append(true)
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(new_log_path)
+            .map_err(|e| from_io_error(e))?;
+        let logfile = Rc::new(LogFile::new(new_log_id, file));
+        let mut edit = VersionEdit::default();
+        edit.new_mut = Some(new_log_id);
+        edit.mut_to_imm = self.mut_log.as_ref().map(|x| x.get_file_id());
+        self.version_set.log_and_apply(&edit)?;
+        self.mut_log.replace(logfile.clone());
+        Ok(logfile.clone())
+    }
+
+    fn remove_obsolete_files(&self) {
+        todo!()
     }
 }
 
@@ -43,7 +68,6 @@ impl BitcaskDB {
     pub fn open<P: AsRef<Path>>(path: P, options: Options) -> DBResult<BitcaskDB> {
         let db = BitcaskDB {
             options: Arc::new(options.clone()),
-            path: path.as_ref().to_path_buf(),
             core: Arc::new(Mutex::new(BitcaskCore::new(path.as_ref().to_path_buf()))),
         };
         Ok(db)
@@ -64,15 +88,11 @@ impl BitcaskDB {
     pub fn write(&self, options: WriteOptions, batch: &WriteBatch) -> DBResult<()> {
         let mut core = self.core.lock().unwrap();
         let mut_log = match core.mut_log.clone() {
-            None => {
-                // create a imm file
-                todo!();
-            }
             Some(x) if x.get_offset() < self.options.target_file_size => x.clone(),
-            Some(x) => {
-                // switch a new mut log file
-                todo!();
-            }
+            _ => match core.prepare_new_mutlog() {
+                Ok(f) => f.clone(),
+                Err(e) => return Err(e),
+            },
         };
         let handles = batch.consume_by(|x| {
             mut_log.write_entry(x).map(|h| KeyAndEntryHandle {
