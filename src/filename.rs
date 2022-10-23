@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use crate::dbfile::FileId;
 
 pub(crate) enum FileType {
-    Log, // active file for write
-
+    Log,      // log datum file for write
+    Rewrite,  // rewrite log datum file caused by compaction
     Hint,     // persisit index for speeding recover
     Manifest, // the manifest to manage the whole db and compaction
     Lock,     // lock file
@@ -15,6 +15,7 @@ impl FileType {
     pub(crate) fn get_filename(&self, file_id: FileId) -> PathBuf {
         match self {
             FileType::Log => format!("{:09}.dat", file_id).into(),
+            FileType::Rewrite => format!("{:09}.rew", file_id).into(),
             FileType::Hint => format!("{:09}.hit", file_id).into(),
             FileType::Manifest => format!("MANIFEST-{:09}", file_id).into(),
             FileType::Lock => "LOCK".to_owned().into(),

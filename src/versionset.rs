@@ -21,8 +21,8 @@ pub(crate) struct Version {
 
 #[derive(Debug, Default)]
 pub(crate) struct VersionEdit {
-    pub(crate) new_mut: Option<FileId>,
-    pub(crate) mut_to_imm: Option<FileId>,
+    pub(crate) new_active_file: Option<FileId>,
+    pub(crate) need_freeze: Option<FileId>,
     pub(crate) compact_input_imm: Option<Vec<FileId>>,
     pub(crate) compact_output_imm: Option<Vec<FileId>>,
 }

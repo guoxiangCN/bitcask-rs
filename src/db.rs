@@ -17,21 +17,28 @@ pub struct BitcaskDB {
 }
 
 struct BitcaskCore {
-    mut_log: Option<Rc<LogFile>>,
-    imm_logs: HashMap<FileId, Rc<LogFile>>,
+    /// the only file active for accept write.
+    active_file: Option<Rc<LogFile>>,
+
+    /// all freeze files mappings, contains log or rewrite log.
+    freeze_files: HashMap<FileId, Rc<LogFile>>,
+
+    /// the in-memory index parts, maybe hashmap/btreemap/artree
     mem_index: BTreeMap<Vec<u8>, EntryHandle>,
+
+    /// TODO: LRU
     row_cache: HashMap<EntryHandle, EntryBlock>,
 
+    path: PathBuf,
     bg_error: Option<DBError>,
     version_set: VersionSet,
-    path: PathBuf,
 }
 
 impl BitcaskCore {
     fn new(dbpath: PathBuf) -> Self {
         Self {
-            mut_log: None,
-            imm_logs: HashMap::new(),
+            active_file: None,
+            freeze_files: HashMap::new(),
             mem_index: BTreeMap::new(),
             row_cache: HashMap::new(),
             bg_error: None,
@@ -40,7 +47,7 @@ impl BitcaskCore {
         }
     }
 
-    fn prepare_new_mutlog(&mut self) -> DBResult<Rc<LogFile>> {
+    fn prepare_new_active_file(&mut self) -> DBResult<Rc<LogFile>> {
         let new_log_id = self.version_set.new_logfile_id();
         let new_log_path = FileType::Log.get_full_filepath(self.path.clone(), new_log_id);
         let file = std::fs::File::options()
@@ -50,13 +57,20 @@ impl BitcaskCore {
             .write(true)
             .open(new_log_path)
             .map_err(|e| from_io_error(e))?;
-        let logfile = Rc::new(LogFile::new(new_log_id, file));
+        let active_file = Rc::new(LogFile::new(new_log_id, file));
         let mut edit = VersionEdit::default();
-        edit.new_mut = Some(new_log_id);
-        edit.mut_to_imm = self.mut_log.as_ref().map(|x| x.get_file_id());
+        edit.new_active_file = Some(new_log_id);
+        edit.need_freeze = self.active_file.as_ref().map(|x| x.get_file_id());
         self.version_set.log_and_apply(&edit)?;
-        self.mut_log.replace(logfile.clone());
-        Ok(logfile.clone())
+
+        // change the memory state which is a not-fail operation.
+        let old_active_file = self.active_file.replace(active_file.clone());
+        if old_active_file.is_some() {
+            let old_active_file = old_active_file.unwrap();
+            self.freeze_files
+                .insert(old_active_file.get_file_id(), old_active_file);
+        }
+        Ok(active_file.clone())
     }
 
     fn remove_obsolete_files(&self) {
@@ -87,9 +101,9 @@ impl BitcaskDB {
 
     pub fn write(&self, options: WriteOptions, batch: &WriteBatch) -> DBResult<()> {
         let mut core = self.core.lock().unwrap();
-        let mut_log = match core.mut_log.clone() {
+        let mut_log = match core.active_file.clone() {
             Some(x) if x.get_offset() < self.options.target_file_size => x.clone(),
-            _ => match core.prepare_new_mutlog() {
+            _ => match core.prepare_new_active_file() {
                 Ok(f) => f.clone(),
                 Err(e) => return Err(e),
             },
@@ -121,13 +135,13 @@ impl BitcaskDB {
 
         assert!(handle.file_id != INVALID_FILE_ID);
         let search_target_fn = || match core
-            .mut_log
+            .active_file
             .clone()
             .filter(|x| x.get_file_id() == handle.file_id)
         {
             Some(x) => return Some(x),
             None => {
-                return match core.imm_logs.get(&handle.file_id) {
+                return match core.freeze_files.get(&handle.file_id) {
                     Some(x) => Some(x.clone()),
                     None => None,
                 }
