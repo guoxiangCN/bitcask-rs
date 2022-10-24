@@ -1,6 +1,9 @@
-mod cache;
+#![feature(cell_update)]
+
 #[allow(dead_code)]
+
 mod db;
+mod cache;
 mod dbfile;
 mod errors;
 mod filename;

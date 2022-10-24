@@ -66,7 +66,7 @@ impl LogFile {
             if bytes == 0 {
                 break; // EOF
             }
-            self.offset.set(self.get_offset() + bytes as u64);
+            self.offset.update(|x| x + bytes as u64);
             nwrite += bytes;
         }
         Ok(EntryHandle {
